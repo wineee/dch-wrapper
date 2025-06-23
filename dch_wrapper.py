@@ -115,7 +115,7 @@ class DchWrapper:
             str: 用户输入的版本号
         """
         try:
-            # 获取最新的tag
+            # 获取最近的tag
             latest_tag = subprocess.check_output(
                 ['git', 'describe', '--tags', '--abbrev=0'], 
                 text=True, 
@@ -126,6 +126,10 @@ class DchWrapper:
                 # 移除可能的v前缀
                 default_version = latest_tag.lstrip('v')
                 print(f"📦 从git tag获取到最新版本号: {default_version}")
+                
+                # 尝试自动递增版本号
+                default_version = self.increment_version_number(default_version)
+                print(f"📦 建议的版本号: {default_version}")
             else:
                 default_version = "1.0.0"
                 print("📦 未找到git tag，使用默认版本号: 1.0.0")
@@ -153,6 +157,36 @@ class DchWrapper:
                 print("\n用户中断操作")
                 return default_version
     
+    def increment_version_number(self, version: str) -> str:
+        """
+        自动递增版本号的最后一个数字部分
+        
+        Args:
+            version: 原始版本号
+            
+        Returns:
+            str: 递增后的版本号
+        """
+        try:
+            # 分割版本号
+            parts = version.split('.')
+            
+            # 从后往前查找最后一个数字部分
+            for i in range(len(parts) - 1, -1, -1):
+                part = parts[i]
+                if part.isdigit():
+                    # 找到最后一个数字部分，递增它
+                    new_part = str(int(part) + 1)
+                    parts[i] = new_part
+                    return '.'.join(parts)
+            
+            # 如果没有找到数字部分，返回原版本号
+            return version
+            
+        except (ValueError, IndexError):
+            # 如果解析失败，返回原版本号
+            return version
+    
     def get_git_changes_since_last_tag(self) -> str:
         """
         获取从上次tag到当前commit的git变更日志
@@ -161,14 +195,29 @@ class DchWrapper:
             str: 变更日志内容
         """
         try:
-            # 获取所有提交（从最新tag到HEAD）
-            commits = subprocess.check_output(
-                ['git', 'log', '--format=%s', '--no-merges'],
-                text=True,
+            # 获取最近的tag
+            latest_tag = subprocess.check_output(
+                ['git', 'describe', '--tags', '--abbrev=0'], 
+                text=True, 
                 stderr=subprocess.DEVNULL
             ).strip()
             
-            print("📝 获取所有提交记录")
+            if latest_tag:
+                # 获取从最新tag到HEAD的提交
+                commits = subprocess.check_output(
+                    ['git', 'log', f'{latest_tag}..HEAD', '--format=%s', '--no-merges'],
+                    text=True,
+                    stderr=subprocess.DEVNULL
+                ).strip()
+                print(f"📝 获取从tag {latest_tag} 到当前HEAD的变更")
+            else:
+                # 如果没有tag，获取所有提交
+                commits = subprocess.check_output(
+                    ['git', 'log', '--format=%s', '--no-merges'],
+                    text=True,
+                    stderr=subprocess.DEVNULL
+                ).strip()
+                print("📝 获取所有提交记录")
                 
             if not commits:
                 return "无变更记录"
@@ -230,6 +279,12 @@ class DchWrapper:
                     print(f"  {status_code} {file_path}")
             
             print("\n建议在运行dch-wrapper之前先提交这些修改")
+            
+            # 在dry-run模式下自动选择继续执行
+            if self.dry_run:
+                print("🔍 模拟模式，自动选择继续执行")
+                return True
+            
             print("是否继续执行? (y/N): ", end="")
             
             try:
@@ -276,24 +331,30 @@ class DchWrapper:
             changelog = self.get_git_changes_since_last_tag()
             changelog_lines = [line.strip() for line in changelog.split('\n') if line.strip()]
         
-        # 构建dch命令基础参数
-        dch_base_cmd = ['dch', '-v', version]
+        if not changelog_lines:
+            print("⚠️  没有可用的变更日志，已跳过dch操作")
+            return True
+        
+        # 构建dch命令
+        dch_newversion_cmd = ['dch', f'--newversion={version}', changelog_lines[0]]
+        dch_append_cmds = [['dch', '-a', line] for line in changelog_lines[1:]]
         
         if self.dry_run:
             print("🔍 模拟执行 (dry-run模式)")
-            for line in changelog_lines:
-                print(f"命令: {' '.join(dch_base_cmd + ['-a', line])}")
+            print(f"命令: {' '.join(dch_newversion_cmd)}")
+            for cmd in dch_append_cmds:
+                print(f"命令: {' '.join(cmd)}")
             print("第二步命令: dch -e")
             print(f"变更日志内容:\n" + '\n'.join(changelog_lines))
             return True
         
         try:
-            # 逐行添加变更日志
-            print("🚀 第一步：逐行添加变更日志...")
+            # 添加变更日志
+            print("🚀 第一步：添加变更日志...")
             env = os.environ.copy()
-            for line in changelog_lines:
-                dch_cmd = dch_base_cmd + ['-a', line]
-                subprocess.run(dch_cmd, env=env, check=True)
+            subprocess.run(dch_newversion_cmd, env=env, check=True)
+            for cmd in dch_append_cmds:
+                subprocess.run(cmd, env=env, check=True)
             print("✅ dch命令执行完成")
             
             # 第二步：运行dch -e命令打开编辑器
