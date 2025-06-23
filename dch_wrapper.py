@@ -126,7 +126,7 @@ class DchWrapper:
             if latest_tag:
                 # 获取从最新tag到HEAD的提交
                 commits = subprocess.check_output(
-                    ['git', 'log', f'{latest_tag}..HEAD', '--oneline', '--no-merges'],
+                    ['git', 'log', f'{latest_tag}..HEAD', '--format=%s', '--no-merges'],
                     text=True,
                     stderr=subprocess.DEVNULL
                 ).strip()
@@ -134,7 +134,7 @@ class DchWrapper:
             else:
                 # 获取所有提交
                 commits = subprocess.check_output(
-                    ['git', 'log', '--oneline', '--no-merges'],
+                    ['git', 'log', '--format=%s', '--no-merges'],
                     text=True,
                     stderr=subprocess.DEVNULL
                 ).strip()
@@ -148,9 +148,7 @@ class DchWrapper:
             formatted_commits = []
             for line in lines:
                 if line.strip():
-                    # 移除commit hash，只保留提交信息
-                    commit_msg = line.split(' ', 1)[1] if ' ' in line else line
-                    formatted_commits.append(f"* {commit_msg}")
+                    formatted_commits.append(f"* {line.strip()}")
             
             return '\n'.join(formatted_commits)
             
