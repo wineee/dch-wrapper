@@ -444,10 +444,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python3 dch_wrapper.py                                    # 使用git log作为变更日志，自动获取版本号
-  python3 dch_wrapper.py "修复bug"                          # 使用自定义消息，自动获取版本号
-  python3 dch_wrapper.py -D testing "测试版本"              # 指定distribution为testing
-  python3 dch_wrapper.py --dry-run                         # 模拟执行，显示两步命令
+  dch-wrapper                                              # 使用git log作为变更日志，自动获取版本号
+  dch-wrapper "修复bug"                                    # 使用自定义消息，自动获取版本号
+  dch-wrapper -D testing "测试版本"                        # 指定distribution为testing
+  dch-wrapper --dry-run                                   # 模拟执行，显示两步命令
         """
     )
     

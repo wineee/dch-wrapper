@@ -1,7 +1,8 @@
 # dch-wrapper
 
 一个帮助非deb开发者使用dch命令的Python脚本，自动化了Debian包开发中的变更日志管理流程。
-代码完全由 ai 生成，并且实现的是非常个性化的需求，请谨慎使用。
+
+*代码完全由 ai 生成，并且实现的是非常个性化的需求，请谨慎使用。*
 
 ## 功能特性
 
@@ -16,6 +17,16 @@
 - 🚀 **两步执行dch**: 自动分两步执行dch命令：
   - 第一步：调用dch命令添加变更日志到changelog文件
   - 第二步：调用dch -e命令打开编辑器，让用户手动调整和编辑变更日志
+
+## 安装
+
+```bash
+# 一键安装到 ~/.local/bin/
+bash install.sh
+```
+
+- 如果 ~/.local/bin 不在你的 PATH 中，脚本会提醒你如何配置。
+- 安装后可直接用 `dch-wrapper` 命令全局调用。
 
 ## 安装要求
 
@@ -41,28 +52,28 @@ sudo dnf install devscripts
 ### 基本用法
 ```bash
 # 使用git log作为变更日志
-python3 dch_wrapper.py
+python3 dch-wrapper
 
 # 或者直接执行（需要执行权限）
-./dch_wrapper.py
+./dch-wrapper
 ```
 
 ### 高级用法
 ```bash
 # 使用自定义消息
-python3 dch_wrapper.py "修复了重要的bug"
+python3 dch-wrapper "修复了重要的bug"
 
 # 指定distribution
-python3 dch_wrapper.py -D testing "测试版本发布"
+python3 dch-wrapper -D testing "测试版本发布"
 
 # 模拟执行，不实际调用dch
-python3 dch_wrapper.py --dry-run
+python3 dch-wrapper --dry-run
 
 # 显示帮助信息
-python3 dch_wrapper.py --help
+python3 dch-wrapper --help
 
 # 显示版本信息
-python3 dch_wrapper.py --version
+python3 dch-wrapper --version
 ```
 
 ## 参数说明
@@ -94,7 +105,7 @@ python3 dch_wrapper.py --version
 ```
 dch-wrapper/
 ├── README.md          # 项目说明文档
-├── dch_wrapper.py     # 主脚本文件
+├── dch-wrapper        # 主脚本文件
 └── .git/             # Git版本控制目录
 ```
 
