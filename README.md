@@ -11,6 +11,7 @@
 - 🔒 **Git状态检查**: 执行前检查git工作目录状态：
   - 如果debian/changelog有未commit的修改，直接拒绝运行
   - 如果其他文件有未commit的修改，警告用户并询问是否继续
+- 🏷️ **Distribution支持**: 默认使用unstable，支持通过命令行参数或交互式输入指定distribution
 - 🚀 **两步执行dch**: 自动分两步执行dch命令：
   - 第一步：调用dch命令添加变更日志到changelog文件
   - 第二步：调用dch -e命令打开编辑器，让用户手动调整和编辑变更日志
@@ -50,6 +51,9 @@ python3 dch_wrapper.py
 # 使用自定义消息
 python3 dch_wrapper.py "修复了重要的bug"
 
+# 指定distribution
+python3 dch_wrapper.py -D testing "测试版本发布"
+
 # 模拟执行，不实际调用dch
 python3 dch_wrapper.py --dry-run
 
@@ -67,6 +71,7 @@ python3 dch_wrapper.py --version
 | `--help` | `-h` | 显示帮助信息 |
 | `--version` | `-v` | 显示版本信息 |
 | `--dry-run` | - | 只显示将要执行的操作，不实际执行 |
+| `--distribution` | `-D` | 指定distribution名称，默认使用unstable |
 | `message` | - | 自定义提交消息，覆盖自动生成的git log |
 
 ## 工作流程
@@ -77,8 +82,9 @@ python3 dch_wrapper.py --version
    - 如果debian/changelog有未commit的修改，直接拒绝运行
    - 如果其他文件有未commit的修改，警告用户并询问是否继续
 4. **获取版本号**: 自动从git tag获取最新版本号，如果没有tag则使用默认版本号1.0.0
-5. **生成变更日志**: 读取git log从上次tag到当前commit的变化
-6. **执行dch命令**: 分两步执行：
+5. **设置Distribution**: 默认使用unstable，用户可以通过命令行参数或交互式输入指定
+6. **生成变更日志**: 读取git log从上次tag到当前commit的变化
+7. **执行dch命令**: 分两步执行：
    - 第一步：调用dch命令添加变更日志到changelog文件
    - 第二步：调用dch -e命令打开编辑器，让用户手动调整和编辑变更日志
 
@@ -109,6 +115,7 @@ dch-wrapper/
 - `check_dch_available()`: 检查dch命令可用性
 - `setup_environment_variables()`: 配置环境变量
 - `check_git_status()`: 检查git工作目录状态
+- `get_distribution()`: 获取distribution设置
 - `get_latest_version_from_git_tag()`: 从git tag获取最新版本号
 - `get_git_changes_since_last_tag()`: 获取git变更日志
 - `run_dch()`: 执行dch命令
@@ -125,4 +132,4 @@ dch-wrapper/
 
 ## 许可证
 
-本项目采用MIT许可证，详见LICENSE文件。
+本项目采用 Unlicense 许可证，详见LICENSE文件。

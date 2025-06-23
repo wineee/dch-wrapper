@@ -19,6 +19,7 @@ dch-wrapper: 帮助非deb开发者使用dch命令的Python脚本
     --help, -h          显示帮助信息
     --version, -v       显示版本信息
     --dry-run          只显示将要执行的操作，不实际执行
+    -D, --distribution  指定distribution名称 (默认: unstable)
     消息               自定义提交消息（可选）
 """
 
@@ -103,6 +104,37 @@ class DchWrapper:
                 print(f"✅ 设置 DEBFULLNAME={name}")
         else:
             print(f"✅ 环境变量已设置: DEBEMAIL={debemail}, DEBFULLNAME={debfullname}")
+    
+    def get_distribution(self, skip_input: bool = False) -> str:
+        """
+        获取distribution设置，默认使用unstable
+        
+        Args:
+            skip_input: 是否跳过用户输入（用于dry-run模式）
+            
+        Returns:
+            str: distribution名称
+        """
+        default_dist = "unstable"
+        
+        # 在dry-run模式下跳过用户输入
+        if skip_input:
+            print(f"📦 模拟模式，使用distribution: {default_dist}")
+            return default_dist
+        
+        # 让用户输入distribution
+        while True:
+            try:
+                user_dist = input(f"请输入distribution (默认: {default_dist}): ").strip()
+                if not user_dist:
+                    user_dist = default_dist
+                
+                print(f"✅ 使用distribution: {user_dist}")
+                return user_dist
+                
+            except KeyboardInterrupt:
+                print("\n用户中断操作")
+                return default_dist
     
     def get_latest_version_from_git_tag(self, skip_input: bool = False) -> str:
         """
@@ -304,12 +336,13 @@ class DchWrapper:
             print("继续执行...")
             return True
     
-    def run_dch(self, custom_message: Optional[str] = None) -> bool:
+    def run_dch(self, custom_message: Optional[str] = None, distribution: Optional[str] = None) -> bool:
         """
         运行dch命令
         
         Args:
             custom_message: 自定义提交消息
+            distribution: distribution名称
             
         Returns:
             bool: 是否成功
@@ -324,6 +357,10 @@ class DchWrapper:
         # 获取最新版本号
         version = self.get_latest_version_from_git_tag(skip_input=self.dry_run)
         
+        # 获取distribution设置
+        if distribution is None:
+            distribution = self.get_distribution(skip_input=self.dry_run)
+        
         # 获取变更日志
         if custom_message:
             changelog_lines = [custom_message]
@@ -336,7 +373,7 @@ class DchWrapper:
             return True
         
         # 构建dch命令
-        dch_newversion_cmd = ['dch', f'--newversion={version}', changelog_lines[0]]
+        dch_newversion_cmd = ['dch', f'--newversion={version}', f'--distribution={distribution}', changelog_lines[0]]
         dch_append_cmds = [['dch', '-a', line] for line in changelog_lines[1:]]
         
         if self.dry_run:
@@ -371,12 +408,13 @@ class DchWrapper:
             print("\n⚠️  用户中断操作")
             return False
     
-    def run(self, custom_message: Optional[str] = None) -> bool:
+    def run(self, custom_message: Optional[str] = None, distribution: Optional[str] = None) -> bool:
         """
         运行完整的dch包装流程
         
         Args:
             custom_message: 自定义提交消息
+            distribution: distribution名称
             
         Returns:
             bool: 是否成功
@@ -396,7 +434,7 @@ class DchWrapper:
             return False
         
         # 4. 运行dch命令
-        return self.run_dch(custom_message)
+        return self.run_dch(custom_message=custom_message, distribution=distribution)
 
 
 def main():
@@ -408,6 +446,7 @@ def main():
 示例:
   python3 dch_wrapper.py                                    # 使用git log作为变更日志，自动获取版本号
   python3 dch_wrapper.py "修复bug"                          # 使用自定义消息，自动获取版本号
+  python3 dch_wrapper.py -D testing "测试版本"              # 指定distribution为testing
   python3 dch_wrapper.py --dry-run                         # 模拟执行，显示两步命令
         """
     )
@@ -416,6 +455,12 @@ def main():
         '--dry-run', 
         action='store_true',
         help='只显示将要执行的操作，不实际执行'
+    )
+    
+    parser.add_argument(
+        '-D', '--distribution',
+        type=str,
+        help='指定distribution名称 (默认: unstable)'
     )
     
     parser.add_argument(
@@ -437,7 +482,7 @@ def main():
     wrapper = DchWrapper(dry_run=args.dry_run)
     
     # 运行包装器
-    success = wrapper.run(custom_message=args.message)
+    success = wrapper.run(custom_message=args.message, distribution=args.distribution)
     
     if success:
         print("\n🎉 dch-wrapper 执行完成!")
