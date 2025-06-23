@@ -5,8 +5,11 @@ dch-wrapper: 帮助非deb开发者使用dch命令的Python脚本
 这个脚本自动化了dch命令的使用流程，包括：
 1. 检查dch命令是否可用
 2. 配置DEBEMAIL和DEBFULLNAME环境变量
-3. 读取git log作为变更日志
-4. 调用dch命令
+3. 检查git工作目录状态，确保没有冲突的修改
+4. 读取git log作为变更日志
+5. 分两步执行dch命令：
+   - 第一步：调用dch命令添加变更日志到changelog文件
+   - 第二步：调用dch -e命令打开编辑器，让用户手动调整和编辑变更日志
 
 使用方法:
     python3 dch_wrapper.py [选项] [消息]
@@ -155,6 +158,69 @@ class DchWrapper:
             print(f"⚠️  警告: 无法获取git变更日志: {e}")
             return "无法获取变更记录"
     
+    def check_git_status(self) -> bool:
+        """
+        检查git状态，确保没有未commit的修改
+        
+        Returns:
+            bool: 是否可以继续执行
+        """
+        try:
+            # 检查是否有未commit的修改
+            status = subprocess.check_output(
+                ['git', 'status', '--porcelain'], 
+                text=True, 
+                stderr=subprocess.DEVNULL
+            ).strip()
+            
+            if not status:
+                print("✅ Git工作目录干净，没有未commit的修改")
+                return True
+            
+            # 检查debian/changelog是否有修改
+            changelog_modified = False
+            for line in status.split('\n'):
+                if line.strip() and 'debian/changelog' in line:
+                    changelog_modified = True
+                    break
+            
+            if changelog_modified:
+                print("❌ 错误: debian/changelog文件有未commit的修改")
+                print("请先提交或丢弃对debian/changelog的修改，然后再运行此脚本")
+                print("建议操作:")
+                print("  git add debian/changelog && git commit -m '更新变更日志'")
+                print("  或者")
+                print("  git checkout -- debian/changelog")
+                return False
+            
+            # 有其他文件的修改，给出警告
+            print("⚠️  警告: 发现未commit的修改:")
+            for line in status.split('\n'):
+                if line.strip():
+                    status_code = line[:2]
+                    file_path = line[3:]
+                    print(f"  {status_code} {file_path}")
+            
+            print("\n建议在运行dch-wrapper之前先提交这些修改")
+            print("是否继续执行? (y/N): ", end="")
+            
+            try:
+                response = input().strip().lower()
+                if response in ['y', 'yes', '是']:
+                    print("继续执行...")
+                    return True
+                else:
+                    print("用户取消操作")
+                    return False
+            except KeyboardInterrupt:
+                print("\n用户中断操作")
+                return False
+                
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️  警告: 无法检查git状态: {e}")
+            print("继续执行...")
+            return True
+    
     def run_dch(self, custom_message: Optional[str] = None, dch_version: Optional[str] = None) -> bool:
         """
         运行dch命令
@@ -191,14 +257,14 @@ class DchWrapper:
         
         if self.dry_run:
             print("🔍 模拟执行 (dry-run模式)")
-            print(f"命令: {' '.join(dch_cmd)}")
+            print(f"第一步命令: {' '.join(dch_cmd)}")
             print(f"变更日志内容:\n{changelog}")
+            print("第二步命令: dch -e")
             return True
         
         try:
-            # 运行dch命令
-            print("🚀 启动dch命令...")
-            print("dch将打开编辑器，请编辑变更日志后保存并退出")
+            # 第一步：运行dch命令添加变更日志
+            print("🚀 第一步：启动dch命令添加变更日志...")
             
             # 设置环境变量
             env = os.environ.copy()
@@ -207,6 +273,15 @@ class DchWrapper:
             result = subprocess.run(dch_cmd, env=env, check=True)
             
             print("✅ dch命令执行完成")
+            
+            # 第二步：运行dch -e命令打开编辑器
+            print("📝 第二步：启动dch -e命令打开编辑器...")
+            print("请编辑变更日志后保存并退出编辑器")
+            
+            dch_edit_cmd = ['dch', '-e']
+            result = subprocess.run(dch_edit_cmd, env=env, check=True)
+            
+            print("✅ 编辑器关闭，变更日志编辑完成")
             return True
             
         except subprocess.CalledProcessError as e:
@@ -237,7 +312,11 @@ class DchWrapper:
         # 2. 设置环境变量
         self.setup_environment_variables()
         
-        # 3. 运行dch命令
+        # 3. 检查git状态
+        if not self.check_git_status():
+            return False
+        
+        # 4. 运行dch命令
         return self.run_dch(custom_message, dch_version)
 
 
@@ -248,10 +327,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python3 dch_wrapper.py                                    # 使用git log作为变更日志
-  python3 dch_wrapper.py "修复bug"                          # 使用自定义消息
-  python3 dch_wrapper.py --dch-version 1.2.3 "新版本发布"   # 指定版本号和消息
-  python3 dch_wrapper.py --dry-run                         # 模拟执行
+  python3 dch_wrapper.py                                    # 使用git log作为变更日志，分两步执行dch
+  python3 dch_wrapper.py "修复bug"                          # 使用自定义消息，分两步执行dch
+  python3 dch_wrapper.py --dch-version 1.2.3 "新版本发布"   # 指定版本号和消息，分两步执行dch
+  python3 dch_wrapper.py --dry-run                         # 模拟执行，显示两步命令
         """
     )
     
