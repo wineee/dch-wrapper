@@ -6,8 +6,9 @@ dch-wrapper: 帮助非deb开发者使用dch命令的Python脚本
 1. 检查dch命令是否可用
 2. 配置DEBEMAIL和DEBFULLNAME环境变量
 3. 检查git工作目录状态，确保没有冲突的修改
-4. 读取git log作为变更日志
-5. 分两步执行dch命令：
+4. 自动从git tag获取最新版本号
+5. 读取git log作为变更日志
+6. 分两步执行dch命令：
    - 第一步：调用dch命令添加变更日志到changelog文件
    - 第二步：调用dch -e命令打开编辑器，让用户手动调整和编辑变更日志
 
@@ -18,7 +19,6 @@ dch-wrapper: 帮助非deb开发者使用dch命令的Python脚本
     --help, -h          显示帮助信息
     --version, -v       显示版本信息
     --dry-run          只显示将要执行的操作，不实际执行
-    --dch-version      指定dch版本号参数
     消息               自定义提交消息（可选）
 """
 
@@ -104,12 +104,15 @@ class DchWrapper:
         else:
             print(f"✅ 环境变量已设置: DEBEMAIL={debemail}, DEBFULLNAME={debfullname}")
     
-    def get_git_changes_since_last_tag(self) -> str:
+    def get_latest_version_from_git_tag(self, skip_input: bool = False) -> str:
         """
-        获取从上次tag到当前commit的git变更日志
+        从git tag获取最新版本号，并让用户输入自定义版本号
         
+        Args:
+            skip_input: 是否跳过用户输入（用于dry-run模式）
+            
         Returns:
-            str: 变更日志内容
+            str: 用户输入的版本号
         """
         try:
             # 获取最新的tag
@@ -118,37 +121,64 @@ class DchWrapper:
                 text=True, 
                 stderr=subprocess.DEVNULL
             ).strip()
-        except subprocess.CalledProcessError:
-            # 如果没有tag，获取所有提交
-            latest_tag = None
-        
-        try:
+            
             if latest_tag:
-                # 获取从最新tag到HEAD的提交
-                commits = subprocess.check_output(
-                    ['git', 'log', f'{latest_tag}..HEAD', '--format=%s', '--no-merges'],
-                    text=True,
-                    stderr=subprocess.DEVNULL
-                ).strip()
-                print(f"📝 获取从tag {latest_tag} 到当前HEAD的变更")
+                # 移除可能的v前缀
+                default_version = latest_tag.lstrip('v')
+                print(f"📦 从git tag获取到最新版本号: {default_version}")
             else:
-                # 获取所有提交
-                commits = subprocess.check_output(
-                    ['git', 'log', '--format=%s', '--no-merges'],
-                    text=True,
-                    stderr=subprocess.DEVNULL
-                ).strip()
-                print("📝 获取所有提交记录")
+                default_version = "1.0.0"
+                print("📦 未找到git tag，使用默认版本号: 1.0.0")
+                
+        except subprocess.CalledProcessError:
+            default_version = "1.0.0"
+            print("📦 无法获取git tag，使用默认版本号: 1.0.0")
+        
+        # 在dry-run模式下跳过用户输入
+        if skip_input:
+            print(f"📦 模拟模式，使用版本号: {default_version}")
+            return default_version
+        
+        # 让用户输入版本号
+        while True:
+            try:
+                user_version = input(f"请输入版本号 (默认: {default_version}): ").strip()
+                if not user_version:
+                    user_version = default_version
+                
+                print(f"✅ 使用版本号: {user_version}")
+                return user_version
+                
+            except KeyboardInterrupt:
+                print("\n用户中断操作")
+                return default_version
+    
+    def get_git_changes_since_last_tag(self) -> str:
+        """
+        获取从上次tag到当前commit的git变更日志
+        
+        Returns:
+            str: 变更日志内容
+        """
+        try:
+            # 获取所有提交（从最新tag到HEAD）
+            commits = subprocess.check_output(
+                ['git', 'log', '--format=%s', '--no-merges'],
+                text=True,
+                stderr=subprocess.DEVNULL
+            ).strip()
+            
+            print("📝 获取所有提交记录")
                 
             if not commits:
                 return "无变更记录"
                 
-            # 格式化提交信息
+            # 格式化提交信息，不添加*号，因为dch -a会自动添加
             lines = commits.split('\n')
             formatted_commits = []
             for line in lines:
                 if line.strip():
-                    formatted_commits.append(f"* {line.strip()}")
+                    formatted_commits.append(line.strip())
             
             return '\n'.join(formatted_commits)
             
@@ -219,13 +249,12 @@ class DchWrapper:
             print("继续执行...")
             return True
     
-    def run_dch(self, custom_message: Optional[str] = None, dch_version: Optional[str] = None) -> bool:
+    def run_dch(self, custom_message: Optional[str] = None) -> bool:
         """
         运行dch命令
         
         Args:
             custom_message: 自定义提交消息
-            dch_version: dch版本号参数
             
         Returns:
             bool: 是否成功
@@ -237,51 +266,43 @@ class DchWrapper:
             print("请确保当前目录包含debian/目录，或者切换到正确的项目目录")
             return False
         
+        # 获取最新版本号
+        version = self.get_latest_version_from_git_tag(skip_input=self.dry_run)
+        
         # 获取变更日志
         if custom_message:
-            changelog = custom_message
+            changelog_lines = [custom_message]
         else:
             changelog = self.get_git_changes_since_last_tag()
+            changelog_lines = [line.strip() for line in changelog.split('\n') if line.strip()]
         
-        # 构建dch命令
-        dch_cmd = ['dch']
-        
-        # 添加版本号参数
-        if dch_version:
-            dch_cmd.extend(['-v', dch_version])
-        
-        # 添加变更日志
-        dch_cmd.append(changelog)
+        # 构建dch命令基础参数
+        dch_base_cmd = ['dch', '-v', version]
         
         if self.dry_run:
             print("🔍 模拟执行 (dry-run模式)")
-            print(f"第一步命令: {' '.join(dch_cmd)}")
-            print(f"变更日志内容:\n{changelog}")
+            for line in changelog_lines:
+                print(f"命令: {' '.join(dch_base_cmd + ['-a', line])}")
             print("第二步命令: dch -e")
+            print(f"变更日志内容:\n" + '\n'.join(changelog_lines))
             return True
         
         try:
-            # 第一步：运行dch命令添加变更日志
-            print("🚀 第一步：启动dch命令添加变更日志...")
-            
-            # 设置环境变量
+            # 逐行添加变更日志
+            print("🚀 第一步：逐行添加变更日志...")
             env = os.environ.copy()
-            
-            # 运行dch命令
-            result = subprocess.run(dch_cmd, env=env, check=True)
-            
+            for line in changelog_lines:
+                dch_cmd = dch_base_cmd + ['-a', line]
+                subprocess.run(dch_cmd, env=env, check=True)
             print("✅ dch命令执行完成")
             
             # 第二步：运行dch -e命令打开编辑器
             print("📝 第二步：启动dch -e命令打开编辑器...")
             print("请编辑变更日志后保存并退出编辑器")
-            
             dch_edit_cmd = ['dch', '-e']
-            result = subprocess.run(dch_edit_cmd, env=env, check=True)
-            
+            subprocess.run(dch_edit_cmd, env=env, check=True)
             print("✅ 编辑器关闭，变更日志编辑完成")
             return True
-            
         except subprocess.CalledProcessError as e:
             print(f"❌ dch命令执行失败: {e}")
             return False
@@ -289,13 +310,12 @@ class DchWrapper:
             print("\n⚠️  用户中断操作")
             return False
     
-    def run(self, custom_message: Optional[str] = None, dch_version: Optional[str] = None) -> bool:
+    def run(self, custom_message: Optional[str] = None) -> bool:
         """
         运行完整的dch包装流程
         
         Args:
             custom_message: 自定义提交消息
-            dch_version: dch版本号参数
             
         Returns:
             bool: 是否成功
@@ -315,7 +335,7 @@ class DchWrapper:
             return False
         
         # 4. 运行dch命令
-        return self.run_dch(custom_message, dch_version)
+        return self.run_dch(custom_message)
 
 
 def main():
@@ -325,9 +345,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python3 dch_wrapper.py                                    # 使用git log作为变更日志，分两步执行dch
-  python3 dch_wrapper.py "修复bug"                          # 使用自定义消息，分两步执行dch
-  python3 dch_wrapper.py --dch-version 1.2.3 "新版本发布"   # 指定版本号和消息，分两步执行dch
+  python3 dch_wrapper.py                                    # 使用git log作为变更日志，自动获取版本号
+  python3 dch_wrapper.py "修复bug"                          # 使用自定义消息，自动获取版本号
   python3 dch_wrapper.py --dry-run                         # 模拟执行，显示两步命令
         """
     )
@@ -336,12 +355,6 @@ def main():
         '--dry-run', 
         action='store_true',
         help='只显示将要执行的操作，不实际执行'
-    )
-    
-    parser.add_argument(
-        '--dch-version',
-        type=str,
-        help='指定dch版本号参数'
     )
     
     parser.add_argument(
@@ -363,7 +376,7 @@ def main():
     wrapper = DchWrapper(dry_run=args.dry_run)
     
     # 运行包装器
-    success = wrapper.run(custom_message=args.message, dch_version=args.dch_version)
+    success = wrapper.run(custom_message=args.message)
     
     if success:
         print("\n🎉 dch-wrapper 执行完成!")

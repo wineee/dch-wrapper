@@ -6,7 +6,8 @@
 
 - 🔍 **自动检查dch命令**: 检查系统是否安装了devscripts包，如果没有则提供安装指导
 - 📧 **智能环境变量配置**: 自动从git配置中获取作者信息，设置DEBEMAIL和DEBFULLNAME环境变量
-- 📝 **自动生成变更日志**: 读取git log从上次tag到当前commit的变化，作为dch的变更日志
+- 📦 **自动版本号获取**: 自动从git tag获取最新版本号，如果没有tag则使用默认版本号1.0.0
+- 📝 **自动生成变更日志**: 读取git log从上次tag到当前commit的变化，使用简略的提交信息（不包含commit hash）
 - 🔒 **Git状态检查**: 执行前检查git工作目录状态：
   - 如果debian/changelog有未commit的修改，直接拒绝运行
   - 如果其他文件有未commit的修改，警告用户并询问是否继续
@@ -47,10 +48,7 @@ python3 dch_wrapper.py
 ### 高级用法
 ```bash
 # 使用自定义消息
-python3 dch_wrapper.py -m "修复了重要的bug"
-
-# 指定版本号和消息
-python3 dch_wrapper.py --dch-version 1.2.3 "新版本发布"
+python3 dch_wrapper.py "修复了重要的bug"
 
 # 模拟执行，不实际调用dch
 python3 dch_wrapper.py --dry-run
@@ -69,8 +67,7 @@ python3 dch_wrapper.py --version
 | `--help` | `-h` | 显示帮助信息 |
 | `--version` | `-v` | 显示版本信息 |
 | `--dry-run` | - | 只显示将要执行的操作，不实际执行 |
-| `--message` | `-m` | 自定义提交消息，覆盖自动生成的git log |
-| `--dch-version` | - | 指定dch版本号参数，如 "1.2.3" |
+| `message` | - | 自定义提交消息，覆盖自动生成的git log |
 
 ## 工作流程
 
@@ -79,8 +76,9 @@ python3 dch_wrapper.py --version
 3. **检查Git状态**: 检查git工作目录状态：
    - 如果debian/changelog有未commit的修改，直接拒绝运行
    - 如果其他文件有未commit的修改，警告用户并询问是否继续
-4. **生成变更日志**: 读取git log从上次tag到当前commit的变化
-5. **执行dch命令**: 分两步执行：
+4. **获取版本号**: 自动从git tag获取最新版本号，如果没有tag则使用默认版本号1.0.0
+5. **生成变更日志**: 读取git log从上次tag到当前commit的变化
+6. **执行dch命令**: 分两步执行：
    - 第一步：调用dch命令添加变更日志到changelog文件
    - 第二步：调用dch -e命令打开编辑器，让用户手动调整和编辑变更日志
 
@@ -111,6 +109,7 @@ dch-wrapper/
 - `check_dch_available()`: 检查dch命令可用性
 - `setup_environment_variables()`: 配置环境变量
 - `check_git_status()`: 检查git工作目录状态
+- `get_latest_version_from_git_tag()`: 从git tag获取最新版本号
 - `get_git_changes_since_last_tag()`: 获取git变更日志
 - `run_dch()`: 执行dch命令
 
