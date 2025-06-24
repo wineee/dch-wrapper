@@ -138,7 +138,7 @@ class DchWrapper:
     
     def get_latest_version_from_git_tag(self, skip_input: bool = False) -> str:
         """
-        从git tag获取最新版本号，并让用户输入自定义版本号
+        获取最新版本号，优先使用dpkg-parsechangelog，其次使用git tag
         
         Args:
             skip_input: 是否跳过用户输入（用于dry-run模式）
@@ -146,6 +146,45 @@ class DchWrapper:
         Returns:
             str: 用户输入的版本号
         """
+        # 首先尝试使用dpkg-parsechangelog获取版本号
+        try:
+            version = subprocess.check_output(
+                ['dpkg-parsechangelog', '-S', 'Version'], 
+                text=True, 
+                stderr=subprocess.DEVNULL
+            ).strip()
+            
+            if version:
+                print(f"📦 从debian/changelog获取到当前版本号: {version}")
+                
+                # 尝试自动递增版本号
+                default_version = self.increment_version_number(version)
+                print(f"📦 建议的版本号: {default_version}")
+                
+                # 在dry-run模式下跳过用户输入
+                if skip_input:
+                    print(f"📦 模拟模式，使用版本号: {default_version}")
+                    return default_version
+                
+                # 让用户输入版本号
+                while True:
+                    try:
+                        user_version = input(f"请输入版本号 (默认: {default_version}): ").strip()
+                        if not user_version:
+                            user_version = default_version
+                        
+                        print(f"✅ 使用版本号: {user_version}")
+                        return user_version
+                        
+                    except KeyboardInterrupt:
+                        print("\n用户中断操作")
+                        return default_version
+                        
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # dpkg-parsechangelog不存在或执行失败，使用git tag
+            pass
+        
+        # 使用git tag获取版本号
         try:
             # 获取最近的tag
             latest_tag = subprocess.check_output(
