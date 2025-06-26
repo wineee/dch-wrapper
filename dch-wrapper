@@ -202,9 +202,9 @@ class DchWrapper:
         
         # 使用git tag获取版本号
         try:
-            # 获取最近的tag
+            # 获取最近的tag（从当前分支开始查找）
             latest_tag = subprocess.check_output(
-                ['git', 'describe', '--tags', '--abbrev=0'], 
+                ['git', 'describe', '--tags', '--abbrev=0', 'HEAD'], 
                 text=True, 
                 stderr=subprocess.DEVNULL
             ).strip()
@@ -284,9 +284,9 @@ class DchWrapper:
             str: 变更日志内容
         """
         try:
-            # 获取最近的tag
+            # 获取最近的tag（从当前分支开始查找）
             latest_tag = subprocess.check_output(
-                ['git', 'describe', '--tags', '--abbrev=0'], 
+                ['git', 'describe', '--tags', '--abbrev=0', 'HEAD'], 
                 text=True, 
                 stderr=subprocess.DEVNULL
             ).strip()
