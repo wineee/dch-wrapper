@@ -276,10 +276,13 @@ class DchWrapper:
             # 如果解析失败，返回原版本号
             return version
     
-    def get_git_changes_since_last_tag(self) -> str:
+    def get_git_changes_since_last_tag(self, skip_input: bool = False) -> str:
         """
         获取从上次tag到当前commit的git变更日志
         
+        Args:
+            skip_input: 是否跳过用户输入（用于dry-run模式）
+            
         Returns:
             str: 变更日志内容
         """
@@ -318,7 +321,42 @@ class DchWrapper:
                 if line.strip():
                     formatted_commits.append(line.strip())
             
-            return '\n'.join(formatted_commits)
+            # 检查提交数量
+            commit_count = len(formatted_commits)
+            print(f"📊 发现 {commit_count} 个提交")
+            
+            # 如果提交数量超过30个，询问用户选择
+            if commit_count > 30 and not skip_input:
+                print(f"⚠️  提交数量较多 ({commit_count} 个)，建议选择:")
+                print("  1. 全部提交 (完整记录)")
+                print("  2. 最近30个提交 (简洁记录)")
+                print("  3. 取消操作")
+                
+                while True:
+                    try:
+                        choice = input("请选择 (1/2/3): ").strip()
+                        if choice == '1':
+                            print("✅ 选择全部提交")
+                            return '\n'.join(formatted_commits)
+                        elif choice == '2':
+                            print("✅ 选择最近30个提交")
+                            return '\n'.join(formatted_commits[:30])
+                        elif choice == '3':
+                            print("❌ 用户取消操作")
+                            return "用户取消操作"
+                        else:
+                            print("❌ 无效选择，请输入 1、2 或 3")
+                    except KeyboardInterrupt:
+                        print("\n⚠️  用户中断操作 (Ctrl+C)")
+                        print("📝 程序已安全退出")
+                        sys.exit(1)
+            elif commit_count > 30 and skip_input:
+                # 在dry-run模式下自动选择最近30个提交
+                print(f"🔍 模拟模式，自动选择最近30个提交 (共{commit_count}个)")
+                return '\n'.join(formatted_commits[:30])
+            else:
+                print(f"✅ 提交数量适中 ({commit_count} 个)，使用全部提交")
+                return '\n'.join(formatted_commits)
             
         except subprocess.CalledProcessError as e:
             print(f"⚠️  警告: 无法获取git变更日志: {e}")
@@ -423,7 +461,11 @@ class DchWrapper:
         if custom_message:
             changelog_lines = [custom_message]
         else:
-            changelog = self.get_git_changes_since_last_tag()
+            changelog = self.get_git_changes_since_last_tag(skip_input=self.dry_run)
+            # 检查用户是否取消操作
+            if changelog == "用户取消操作":
+                print("❌ 用户取消操作，程序退出")
+                return False
             changelog_lines = [line.strip() for line in changelog.split('\n') if line.strip()]
         
         if not changelog_lines:

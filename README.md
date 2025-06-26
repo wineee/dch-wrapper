@@ -10,6 +10,10 @@
 - 📧 **智能环境变量配置**: 自动从git配置中获取作者信息，设置DEBEMAIL和DEBFULLNAME环境变量
 - 📦 **自动版本号获取**: 自动从git tag获取最新版本号，如果没有tag则使用默认版本号1.0.0
 - 📝 **自动生成变更日志**: 读取git log从上次tag到当前commit的变化，使用简略的提交信息（不包含commit hash）
+- 📊 **智能提交数量控制**: 当提交数量超过30个时，提供用户选择：
+  - 全部提交（完整记录）
+  - 最近30个提交（简洁记录）
+  - 取消操作
 - 🔒 **Git状态检查**: 执行前检查git工作目录状态：
   - 如果debian/changelog有未commit的修改，直接拒绝运行
   - 如果其他文件有未commit的修改，警告用户并询问是否继续
@@ -97,7 +101,11 @@ python3 dch-wrapper --version
 4. **获取版本号**: 自动从git tag获取最新版本号，如果没有tag则使用默认版本号1.0.0
 5. **设置Distribution**: 默认使用unstable，用户可以通过命令行参数或交互式输入指定
 6. **生成变更日志**: 读取git log从上次tag到当前commit的变化
-7. **执行dch命令**: 分两步执行：
+7. **智能提交数量控制**: 当提交数量超过30个时，提供用户选择：
+   - 全部提交（完整记录）
+   - 最近30个提交（简洁记录）
+   - 取消操作
+8. **执行dch命令**: 分两步执行：
    - 第一步：调用dch命令添加变更日志到changelog文件
    - 第二步：调用dch -e命令打开编辑器，让用户手动调整和编辑变更日志
 
@@ -131,7 +139,7 @@ dch-wrapper/
 - `check_git_status()`: 检查git工作目录状态
 - `get_distribution()`: 获取distribution设置
 - `get_latest_version_from_git_tag()`: 从git tag获取最新版本号
-- `get_git_changes_since_last_tag()`: 获取git变更日志
+- `get_git_changes_since_last_tag()`: 获取git变更日志，包含智能提交数量控制
 - `run_dch()`: 执行dch命令
 
 ### 扩展性
